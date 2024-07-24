@@ -1,0 +1,195 @@
+[gd_scene load_steps=2 format=3 uid="uid://2r6fgbtgriyb"]
+
+[ext_resource type="Script" path="res://NakamaClient.cs" id="1_4lgs5"]
+
+[node name="MainUI" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_4lgs5")
+
+[node name="LoginPanel" type="Panel" parent="."]
+offset_left = 46.0
+offset_top = 31.0
+offset_right = 267.0
+offset_bottom = 193.0
+
+[node name="Username" type="LineEdit" parent="LoginPanel"]
+layout_mode = 0
+offset_left = 81.0
+offset_top = 15.0
+offset_right = 210.0
+offset_bottom = 46.0
+text = "test@gmail.com"
+
+[node name="Password" type="LineEdit" parent="LoginPanel"]
+layout_mode = 0
+offset_left = 81.0
+offset_top = 58.0
+offset_right = 210.0
+offset_bottom = 89.0
+text = "password"
+
+[node name="Label" type="Label" parent="LoginPanel"]
+layout_mode = 0
+offset_top = 20.0
+offset_right = 83.0
+offset_bottom = 43.0
+text = "UserName"
+
+[node name="Label2" type="Label" parent="LoginPanel"]
+layout_mode = 0
+offset_top = 60.0
+offset_right = 83.0
+offset_bottom = 83.0
+text = "Password"
+
+[node name="LoginButton" type="Button" parent="LoginPanel"]
+layout_mode = 0
+offset_left = 118.0
+offset_top = 100.0
+offset_right = 204.0
+offset_bottom = 132.0
+text = "Submit"
+
+[node name="MatchMaking" type="Panel" parent="."]
+offset_left = 344.0
+offset_top = 27.0
+offset_right = 654.0
+offset_bottom = 185.0
+
+[node name="Join" type="Button" parent="MatchMaking"]
+layout_mode = 0
+offset_left = 165.0
+offset_top = 59.0
+offset_right = 296.0
+offset_bottom = 96.0
+text = "Join"
+
+[node name="StartMatchmake" type="Button" parent="MatchMaking"]
+layout_mode = 0
+offset_left = 160.0
+offset_top = 109.0
+offset_right = 302.0
+offset_bottom = 146.0
+text = "Start Matchmake"
+
+[node name="Ping" type="Button" parent="MatchMaking"]
+layout_mode = 0
+offset_left = 16.0
+offset_top = 59.0
+offset_right = 147.0
+offset_bottom = 96.0
+text = "Ping"
+
+[node name="Label" type="Label" parent="MatchMaking"]
+layout_mode = 0
+offset_left = 10.0
+offset_top = 18.0
+offset_right = 132.0
+offset_bottom = 41.0
+text = "Name Of Match"
+
+[node name="LobbyName" type="LineEdit" parent="MatchMaking"]
+layout_mode = 0
+offset_left = 141.0
+offset_top = 14.0
+offset_right = 295.0
+offset_bottom = 45.0
+text = "test"
+
+[node name="ReadyStart" type="Button" parent="MatchMaking"]
+layout_mode = 0
+offset_left = 13.0
+offset_top = 112.0
+offset_right = 144.0
+offset_bottom = 143.0
+text = "Ready/Start"
+
+[node name="Storage" type="Panel" parent="."]
+offset_left = 11.0
+offset_top = 511.0
+offset_right = 203.0
+offset_bottom = 636.0
+
+[node name="StoreData" type="Button" parent="Storage"]
+layout_mode = 0
+offset_left = 15.0
+offset_top = 8.0
+offset_right = 179.0
+offset_bottom = 39.0
+text = "Store Data"
+
+[node name="GetData" type="Button" parent="Storage"]
+layout_mode = 0
+offset_left = 15.0
+offset_top = 46.0
+offset_right = 181.0
+offset_bottom = 77.0
+text = "Get Data From Store"
+
+[node name="ListData" type="Button" parent="Storage"]
+layout_mode = 0
+offset_left = 15.0
+offset_top = 81.0
+offset_right = 181.0
+offset_bottom = 112.0
+text = "List Data From Store"
+
+[node name="Friends" type="Panel" parent="."]
+offset_left = 356.0
+offset_top = 246.0
+offset_right = 644.0
+offset_bottom = 426.0
+
+[node name="GetFriends" type="Button" parent="Friends"]
+layout_mode = 0
+offset_left = 9.0
+offset_top = 68.0
+offset_right = 127.0
+offset_bottom = 103.0
+text = "Get Friend"
+
+[node name="AddFriend" type="Button" parent="Friends"]
+layout_mode = 0
+offset_left = 153.0
+offset_top = 68.0
+offset_right = 271.0
+offset_bottom = 103.0
+text = "Add Friend"
+
+[node name="BlockFriend" type="Button" parent="Friends"]
+layout_mode = 0
+offset_left = 11.0
+offset_top = 129.0
+offset_right = 129.0
+offset_bottom = 164.0
+text = "Block Friend"
+
+[node name="DeleteFriend" type="Button" parent="Friends"]
+layout_mode = 0
+offset_left = 150.0
+offset_top = 129.0
+offset_right = 268.0
+offset_bottom = 164.0
+text = "Delete Friend"
+
+[node name="FriendName" type="LineEdit" parent="Friends"]
+layout_mode = 0
+offset_left = 22.0
+offset_top = 22.0
+offset_right = 269.0
+offset_bottom = 53.0
+placeholder_text = "Name Of Friend"
+
+[connection signal="button_down" from="LoginPanel/LoginButton" to="." method="_on_login_button_button_down"]
+[connection signal="button_down" from="MatchMaking/Join" to="." method="_on_join_button_down"]
+[connection signal="button_down" from="MatchMaking/StartMatchmake" to="." method="_on_start_matchmake_button_down"]
+[connection signal="button_down" from="MatchMaking/Ping" to="." method="_on_ping_button_down"]
+[connection signal="button_down" from="MatchMaking/ReadyStart" to="." method="_on_ready_start_button_down"]
+[connection signal="button_down" from="Storage/StoreData" to="." method="_on_store_data_button_down"]
+[connection signal="button_down" from="Storage/GetData" to="." method="_on_get_data_button_down"]
+[connection signal="button_down" from="Storage/ListData" to="." method="_on_list_data_button_down"]
+[connection signal="button_down" from="Friends/GetFriends" to="." method="_on_get_friends_button_down"]
+[connection signal="button_down" from="Friends/AddFriend" to="." method="_on_add_friend_button_down"]
+[connection signal="button_down" from="Friends/BlockFriend" to="." method="_on_block_friend_button_down"]
+[connection signal="button_down" from="Friends/DeleteFriend" to="." method="_on_delete_friend_button_down"]
