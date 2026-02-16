@@ -4,9 +4,20 @@ using Newtonsoft.Json;
 using System;
 using System.Text.Json.Serialization;
 
+/// <summary>
+/// Handles local player movement and basic player node initialization.
+/// Movement is applied only when this node is the multiplayer authority.
+/// </summary>
 public partial class CharacterController : CharacterBody2D
 {
+	/// <summary>
+	/// Horizontal movement speed.
+	/// </summary>
 	public const float Speed = 300.0f;
+
+	/// <summary>
+	/// Upward impulse used for jump.
+	/// </summary>
 	public const float JumpVelocity = -400.0f;
 
 	public PlayerInfo Info;
@@ -14,31 +25,24 @@ public partial class CharacterController : CharacterBody2D
 	// Get the gravity from the project settings to be synced with RigidBody nodes.
 	public float gravity = ProjectSettings.GetSetting("physics/2d/default_gravity").AsSingle();
 
-    public override void _Ready()
-    {
-        base._Ready();
-		NakamaClient.Client.PlayerDataSync += onPlayerDataSync;
-    }
+	public override void _Ready()
+	{
+		base._Ready();
+	}
 
+	/// <summary>
+	/// Sets the player's visible name and initial spawn position.
+	/// </summary>
+	/// <param name="name">Player display identifier.</param>
+	/// <param name="position">Spawn world position.</param>
 	public void SetupPlayer(string name, Vector2 position){
 		GlobalPosition = position;
 		GetNode<Label>("Label").Text = name;
 	}
 
-    private void onPlayerDataSync(string data)
-    {
-        var playerData = JsonConvert.DeserializeObject<PlayerSyncData>(data);
-
-		if(playerData.Id == Name){
-			GlobalPosition = playerData.Position;
-			RotationDegrees = playerData.RotationDegrees;
-		}
-    }
-
-
-    public override void _PhysicsProcess(double delta)
+	public override void _PhysicsProcess(double delta)
 	{
-		if(Name == NakamaClient.Session.Username){
+		if (IsMultiplayerAuthority()){
 			Vector2 velocity = Velocity;
 
 			// Add the gravity.
@@ -64,16 +68,6 @@ public partial class CharacterController : CharacterBody2D
 			Velocity = velocity;
 			MoveAndSlide();
 
-			syncData();
 		}
-	}
-
-	private void syncData(){
-		PlayerSyncData playerSyncData = new PlayerSyncData(){
-			Position = GlobalPosition,
-			RotationDegrees = RotationDegrees,
-			Id = Name
-		};
-		NakamaClient.SyncData(JsonConvert.SerializeObject(playerSyncData), 1);
 	}
 }

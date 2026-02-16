@@ -10,6 +10,10 @@ using System.Text.RegularExpressions;
 using Microsoft.VisualBasic;
 using System.Threading.Tasks;
 
+/// <summary>
+/// Main client controller for authentication, social features, matchmaking,
+/// and multiplayer game start orchestration.
+/// </summary>
 public partial class NakamaClient : Control
 {
 	// Called when the node enters the scene tree for the first time.
@@ -17,11 +21,24 @@ public partial class NakamaClient : Control
 	private static Client client;
 	public static ISession Session;
 	private static ISocket socket;
-	private static IMatch match;
+	private NakamaMultiplayerBridge _multiplayerBridge;
+	public static NakamaMultiplayerBridge MultiplayerBridge => Client?._multiplayerBridge;
 
 	public static NakamaClient Client;
 
+	/// <summary>
+	/// Runtime roster of players tracked for lobby and spawn flows.
+	/// Key = username.
+	/// </summary>
 	public static Dictionary<string, PlayerInfo> Players = new(); // houses all the players in the game
+	[Export]
+	public string NakamaScheme = "http";
+	[Export]
+	public string NakamaHost = "127.0.0.1";
+	[Export]
+	public int NakamaPort = 7350;
+	[Export]
+	public string NakamaKey = "defaultkey";
 
 	[Signal]
 	public delegate void PlayerDataSyncEventHandler(string data);
@@ -48,7 +65,7 @@ public partial class NakamaClient : Control
 		if (Client != null)
 		{
 			GD.Print("removing second instance");
-
+			
 			QueueFree();
 		}
 		else
@@ -59,9 +76,9 @@ public partial class NakamaClient : Control
 		readyAsync();
 	}
 
-	private async void readyAsync()
+	private void readyAsync()
 	{
-		client = new Client("http", "198.199.80.118", 7350, "defaultkey");
+		client = new Client(NakamaScheme, NakamaHost, NakamaPort, NakamaKey);
 		client.Timeout = 500;
 		//var session = await client.AuthenticateDeviceAsync(OS.GetUniqueId());
 
@@ -86,139 +103,139 @@ public partial class NakamaClient : Control
 
 		socket.ReceivedChannelMessage += onChannelMessage;
 		subToFriendsChannels();
+
+		_multiplayerBridge = new NakamaMultiplayerBridge(socket);
+
+		// 2. Connect to the bridge's custom signals (using C# Events)
+		_multiplayerBridge.MatchJoinError += OnMatchJoinError;
+		_multiplayerBridge.MatchJoined += OnBridgeMatchJoined;
+
+		// 3. Assign the Godot MultiplayerPeer
+		// Use GetTree().GetMultiplayer() if you are outside a Node, 
+		// or just Multiplayer if you are inside a Node class.
+		Multiplayer.MultiplayerPeer = _multiplayerBridge.MultiplayerPeer;
 	}
 
-    
-    public async void _on_join_button_down()
+	
+	public async void _on_join_button_down()
 	{
-		//socket = Socket.From(client);
-		//await socket.ConnectAsync(Session);
-
-		socket.ReceivedMatchPresence += onMatchPresence;
-		socket.ReceivedMatchState += onMatchState;
-
-		
-
-
-		match = await socket.CreateMatchAsync(GetNode<LineEdit>("MatchMaking/LobbyName").Text);
-		
-		AddToChat(GetNode<LineEdit>("MatchMaking/LobbyName").Text, GetNode<LineEdit>("MatchMaking/LobbyName").Text, ChannelType.Room, false, false);
-		
-		GD.Print($"Created Match with ID: {match.Id}");
-
-		await socket.JoinMatchAsync(match.Id);
-
-		GD.Print($"Joined Match with id: {match.Id}");
-
-		foreach (var item in match.Presences)
+		if (_multiplayerBridge == null)
 		{
-			if (!Players.ContainsKey(item.Username))
+			GD.PushWarning("Multiplayer bridge not initialized. Login first.");
+			return;
+		}
+
+		var lobbyName = GetNode<LineEdit>("MatchMaking/LobbyName").Text;
+		await AddToChat(lobbyName, lobbyName, ChannelType.Room, false, false);
+		_multiplayerBridge.JoinNamedMatch(lobbyName);
+	}
+
+	private void OnBridgeMatchJoined()
+	{
+		CallDeferred(nameof(OnBridgeMatchJoinedDeferred));
+	}
+
+	/// <summary>
+	/// Runs on the main thread after the bridge signals a successful match join.
+	/// Rebuilds local roster to keep scene spawning deterministic across peers.
+	/// </summary>
+	private void OnBridgeMatchJoinedDeferred()
+	{
+		if (Multiplayer == null || Multiplayer.MultiplayerPeer == null)
+		{
+			GD.PushWarning("Bridge reported match joined, but Multiplayer is not ready yet.");
+			return;
+		}
+
+		Players.Clear();
+
+		var bridge = MultiplayerBridge;
+		if (bridge != null)
+		{
+			foreach (var presence in bridge.GetKnownPresences())
 			{
-				Players.Add(item.Username, new PlayerInfo { Id = item.Username });
-				CallDeferred(nameof(EmitPlayerJoinGameSignal), item.Username);
+				EnsurePlayerEntry(presence?.Username);
 			}
 		}
-		if (match.Presences.Count() == 0)
+
+		EnsurePlayerEntry(Session?.Username);
+
+		var peerId = Multiplayer.GetUniqueId();
+		IsHost = peerId == 1;
+		GD.Print($"Bridge connected to match. PeerId: {peerId} (Host: {IsHost}). Players in roster: {Players.Count}");
+	}
+
+	/// <summary>
+	/// Ensures a username exists in <see cref="Players"/> and emits join signal on first insert.
+	/// </summary>
+	/// <param name="username">Username to ensure in roster.</param>
+	private void EnsurePlayerEntry(string username)
+	{
+		if (string.IsNullOrWhiteSpace(username))
 		{
-			IsHost = true;
+			return;
+		}
+
+		if (!Players.ContainsKey(username))
+		{
+			Players[username] = new PlayerInfo { Id = username };
+			CallDeferred(nameof(EmitPlayerJoinGameSignal), username);
 		}
 	}
 
-	private void onMatchState(IMatchState state)
+	private void OnMatchJoinError(string exceptionMessage)
 	{
-		string data = Encoding.UTF8.GetString(state.State);
-		GD.Print($"Recieved data from user: {data}");
-		switch (state.OpCode)
-		{
-			case 0:
-				CallDeferred(nameof(EmitPlayerJoinGameSignal), data);
-				break;
-
-			case 1:
-				CallDeferred(nameof(EmitPlayerSyncDataSignal), data);
-				break;
-
-			case 2:
-				CallDeferred(nameof(EmitStartGameSignal), data);
-				break;
-
-			case 3:
-				CallDeferred(nameof(EmitReadyGameSignal), data);
-				Players[data].Status = 1;
-				if (IsHost)
-				{
-					if (Players.Any(x => x.Value.Status == 0))
-					{
-						return;
-					}
-					GD.Print("Host start Game");
-					SyncData("", 2);
-					CallDeferred(nameof(EmitStartGameSignal), data);
-
-				}
-				break;
-
-		}
+		GD.PushError($"Match join error: {exceptionMessage}");
 	}
 
 	public void EmitPlayerJoinGameSignal(string data) => EmitSignal(SignalName.PlayerJoinGame, data);
 	public void EmitPlayerLeaveGameSignal(string data) => EmitSignal(SignalName.PlayerLeaveGame, data);
-	public void EmitPlayerSyncDataSignal(string data) => EmitSignal(SignalName.PlayerDataSync, data);
 	public void EmitStartGameSignal(string data) => EmitSignal(SignalName.StartGame, data);
 	public void EmitReadyGameSignal(string data) => EmitSignal(SignalName.ReadyGame, data);
 
 
 
-	private void onMatchPresence(IMatchPresenceEvent @event)
+	public void _on_ping_button_down()
 	{
-		foreach (var item in @event.Joins)
+		if (Multiplayer == null || Multiplayer.MultiplayerPeer == null)
 		{
-			if (!Players.ContainsKey(item.Username))
-			{
-				Players.Add(item.Username, new PlayerInfo { Id = item.Username });
-				CallDeferred(nameof(EmitPlayerJoinGameSignal), item.Username);
-			}
+			GD.PushWarning("Multiplayer peer is null. Join a match first.");
+			return;
 		}
 
-		foreach (var item in @event.Leaves)
+		if (Multiplayer.MultiplayerPeer.GetConnectionStatus() != MultiplayerPeer.ConnectionStatus.Connected)
 		{
-			if (Players.ContainsKey(item.Username))
-			{
-				Players.Remove(item.Username);
-				CallDeferred(nameof(EmitPlayerLeaveGameSignal), item.Username);
-			}
+			GD.PushWarning($"Multiplayer peer is not connected (status: {Multiplayer.MultiplayerPeer.GetConnectionStatus()}).");
+			return;
 		}
+
+		Rpc(nameof(OnPingRpc), Session?.Username ?? "Unknown");
 	}
 
-	public async void _on_ping_button_down()
+	[Rpc(MultiplayerApi.RpcMode.AnyPeer)]
+	private void OnPingRpc(string senderName)
 	{
-		var data = Encoding.UTF8.GetBytes("Hello World!");
-
-		await socket.SendMatchStateAsync(match.Id, 1, data);
+		var remotePeerId = Multiplayer.GetRemoteSenderId();
+		GD.Print($"RPC ping received from peer {remotePeerId} ({senderName})");
 	}
 
 	public async void _on_start_matchmake_button_down()
 	{
-		socket = Socket.From(client);
-		await socket.ConnectAsync(Session);
+		if (_multiplayerBridge == null)
+		{
+			GD.PushWarning("Multiplayer bridge not initialized. Login first.");
+			return;
+		}
 
-		socket.ReceivedMatchPresence += onMatchPresence;
-		socket.ReceivedMatchState += onMatchState;
-		socket.ReceivedMatchmakerMatched += onMatchmakerMatched;
 		var query = "+properties.skill:>50 properties.mode:deathmatch";
 		var stringProps = new Dictionary<string, string> { { "mode", "deathmatch" } };
 		var numericProps = new Dictionary<string, double> { { "skill", 100 } };
 
 		var matchmakerTicket = await socket.AddMatchmakerAsync(query, 2, 8, stringProps, numericProps);
-		GD.Print($"created match ticket with ticket {matchmakerTicket.Ticket}");
+		GD.Print($"[MM] Created matchmaker ticket: {matchmakerTicket.Ticket}");
+		_multiplayerBridge.StartMatchmaking(matchmakerTicket);
+		GD.Print("[MM] Bridge matchmaking started. Waiting for match assignment...");
 
-	}
-
-	private async void onMatchmakerMatched(IMatchmakerMatched matched)
-	{
-
-		match = await socket.JoinMatchAsync(matched);
-		GD.Print($"joined match with id {match.Id}");
 	}
 	#region Store Section
 	private async void _on_store_data_button_down()
@@ -292,12 +309,77 @@ public partial class NakamaClient : Control
 		await client.DeleteFriendsAsync(Session, null, new[] { GetNode<LineEdit>("Friends/FriendName").Text });
 	}
 
-	public static async void SyncData(string data, int opcode) => await socket.SendMatchStateAsync(match.Id, opcode, data);
-
 	public void _on_ready_start_button_down()
 	{
-		Players[Session.Username].Status = 1;
-		SyncData(Session.Username, 3);
+		GD.Print("[READY] Ready/Start button pressed.");
+
+		if (Multiplayer == null || Multiplayer.MultiplayerPeer == null)
+		{
+			GD.PushWarning("Multiplayer peer is null. Join a match first.");
+			return;
+		}
+
+		if (Multiplayer.MultiplayerPeer.GetConnectionStatus() != MultiplayerPeer.ConnectionStatus.Connected)
+		{
+			GD.PushWarning($"Multiplayer peer is not connected (status: {Multiplayer.MultiplayerPeer.GetConnectionStatus()}).");
+			return;
+		}
+
+		var username = Session?.Username;
+		if (string.IsNullOrWhiteSpace(username))
+		{
+			GD.PushWarning("[READY] Session username is empty; cannot send ready RPC.");
+			return;
+		}
+
+		EnsurePlayerEntry(username);
+		GD.Print($"[READY] Sending ready for '{username}' (local peer {Multiplayer.GetUniqueId()}).");
+		OnReadyRpc(username);
+		Rpc(nameof(OnReadyRpc), username);
+	}
+
+	[Rpc(MultiplayerApi.RpcMode.AnyPeer)]
+	private void OnReadyRpc(string username)
+	{
+		if (string.IsNullOrWhiteSpace(username))
+		{
+			GD.PushWarning("[READY] Received ready RPC with empty username.");
+			return;
+		}
+
+		EnsurePlayerEntry(username);
+		Players[username].Status = 1;
+		CallDeferred(nameof(EmitReadyGameSignal), username);
+		GD.Print($"[READY] '{username}' marked ready. Ready players: {Players.Count(x => x.Value.Status == 1)}/{Players.Count}.");
+
+		if (!IsHost)
+		{
+			GD.Print("[READY] Local peer is not host; waiting for host start signal.");
+			return;
+		}
+
+		if (Players.Any(x => x.Value.Status == 0))
+		{
+			GD.Print("[READY] Host waiting: not all players are ready yet.");
+			return;
+		}
+
+		if (Multiplayer == null || Multiplayer.MultiplayerPeer == null || Multiplayer.MultiplayerPeer.GetConnectionStatus() != MultiplayerPeer.ConnectionStatus.Connected)
+		{
+			GD.PushWarning("[READY] Host cannot broadcast start; multiplayer peer is not connected.");
+			return;
+		}
+
+		GD.Print("[READY] Host confirmed all players ready. Broadcasting start game RPC.");
+		OnStartGameRpc();
+		Rpc(nameof(OnStartGameRpc));
+	}
+
+	[Rpc(MultiplayerApi.RpcMode.AnyPeer)]
+	private void OnStartGameRpc()
+	{
+		GD.Print("[START] Start game RPC received.");
+		CallDeferred(nameof(EmitStartGameSignal), Session?.Username ?? "");
 	}
 	#endregion
 	#region Group Section
@@ -476,9 +558,9 @@ public partial class NakamaClient : Control
 	#region Chat
 
 	private void onChannelMessage(IApiChannelMessage message)
-    {
+	{
 		GD.Print(message);
-        ChatMessage currentMessage = JsonParser.FromJson<ChatMessage>(message.Content);
+		ChatMessage currentMessage = JsonParser.FromJson<ChatMessage>(message.Content);
 		if(currentMessage.Type == 0){
 			CallDeferred(nameof(onChannelMessageDeffered), currentMessage.ID, currentMessage.Message, currentMessage.User);
 		}
@@ -527,19 +609,19 @@ public partial class NakamaClient : Control
 	private async void subToFriendsChannels(){
 		var groupResult = await client.ListGroupsAsync(Session, null, 100, null);
 		foreach (var item in groupResult.Groups)
-        {
-            await AddToChat(item.Id, item.Name, ChannelType.Group);
-        }
+		{
+			await AddToChat(item.Id, item.Name, ChannelType.Group);
+		}
 
 		var result = await client.ListFriendsAsync(Session, null, 100, "");
 		foreach (var item in result.Friends)
-        {
-            await AddToChat(item.User.Id, item.User.DisplayName, ChannelType.DirectMessage);
-        }
-    }
+		{
+			await AddToChat(item.User.Id, item.User.DisplayName, ChannelType.DirectMessage);
+		}
+	}
 
-    private async Task AddToChat(string id, string displayName, ChannelType channelType, bool presistant = true, bool publicRoom = false)
-    {
+	private async Task AddToChat(string id, string displayName, ChannelType channelType, bool presistant = true, bool publicRoom = false)
+	{
 		try
 		{
 			var channel = await socket.JoinChatAsync(id, channelType, presistant, publicRoom);
@@ -571,10 +653,10 @@ public partial class NakamaClient : Control
 			GD.Print("Error cant join chat " + displayName);
 			
 		}
-        
-    }
+		
+	}
 
-    private async void onChatTabChanged(IChannel channel, long index){
+	private async void onChatTabChanged(IChannel channel, long index){
 
 		if((chatChannels[(int)index].ID ) == channel.Id){
 			currentChat = channel;

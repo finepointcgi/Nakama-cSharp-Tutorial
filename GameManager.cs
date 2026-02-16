@@ -1,9 +1,15 @@
 using Godot;
 using System;
 
+/// <summary>
+/// Coordinates the transition from UI/lobby to gameplay level.
+/// </summary>
 public partial class GameManager : Node2D
 {
 
+	/// <summary>
+	/// Level scene instantiated when the start-game signal is received.
+	/// </summary>
 	[Export]
 	public PackedScene LevelToLoad;
 	// Called when the node enters the scene tree for the first time.

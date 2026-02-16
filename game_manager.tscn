@@ -1,22 +1,23 @@
-[gd_scene load_steps=4 format=3 uid="uid://b422hd2avc0yi"]
+[gd_scene format=3 uid="uid://b422hd2avc0yi"]
 
-[ext_resource type="Script" path="res://GameManager.cs" id="1_n5me8"]
+[ext_resource type="Script" uid="uid://s4oj34akvow5" path="res://GameManager.cs" id="1_n5me8"]
 [ext_resource type="PackedScene" uid="uid://dptajwlb40ilf" path="res://TestLevel.tscn" id="2_rt2xi"]
 [ext_resource type="PackedScene" uid="uid://2r6fgbtgriyb" path="res://TestScene.tscn" id="2_ybjp3"]
 
-[node name="GameManager" type="Node2D"]
+[node name="GameManager" type="Node2D" unique_id=1221946422]
 script = ExtResource("1_n5me8")
 LevelToLoad = ExtResource("2_rt2xi")
 
-[node name="UI" type="Control" parent="."]
+[node name="UI" type="Control" parent="." unique_id=2138017755]
 layout_mode = 3
 anchors_preset = 0
 offset_right = 1150.0
 offset_bottom = 649.0
 
-[node name="Node2D" parent="UI" instance=ExtResource("2_ybjp3")]
+[node name="Node2D" parent="UI" unique_id=154996482 instance=ExtResource("2_ybjp3")]
+layout_mode = 0
 offset_left = -1.0
 offset_right = 1154.0
 offset_bottom = 653.0
 
-[node name="World" type="Node2D" parent="."]
+[node name="World" type="Node2D" parent="." unique_id=2124703484]
